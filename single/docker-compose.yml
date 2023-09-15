@@ -1,4 +1,5 @@
 version: '3'
+name: login
 services:
   redis:
     container_name: login-redis
