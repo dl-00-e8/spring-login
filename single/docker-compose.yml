@@ -12,7 +12,7 @@ services:
     image: mysql:8.0.33
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: gwalitdb
+      MYSQL_DATABASE: logindb
       TZ: Asia/Seoul
     ports:
       - "3306:3306"
