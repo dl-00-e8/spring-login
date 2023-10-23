@@ -11,14 +11,21 @@ import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.apache.tomcat.util.net.openssl.ciphers.Authentication;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;
 
 import javax.annotation.PostConstruct;
 import java.security.Key;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Date;
+import java.util.stream.Collectors;
 
 @Log4j2
 @Component
@@ -138,8 +145,33 @@ public class TokenProvider {
                 .build();
     }
 
+    /**
+     * 토큰에서 정보를 추출해서 Authentication 객체를 반환
+     * @param token - 액세스 토큰으로, 해당 토큰에서 정보를 추출해서 사용
+     * @return 토큰 정보와 일치하는 Authentication 객체 반환
+     */
     public Authentication getAuthentication(String token) {
+        String email = getEmail(token);
+        UserRole role = getRole(token);
 
+        User user = userRepository.findByEmailAndRole(email, role).orElseThrow(RuntimeException::new); // Exception은 실제 개발에서는 커스텀 필요
+        Collection<? extends GrantedAuthority> authorities =
+                Arrays.stream(user.getRole().toString().split(","))
+                        .map(SimpleGrantedAuthority::new)
+                        .collect(Collectors.toList());
+
+        UserDetails details = new org.springframework.security.core.userdetails.User(email, "", authorities);
+
+        return new UsernamePasswordAuthenticationToken(details, "", authorities);
+    }
+
+    /**
+     * 토큰의 만료기한 반환
+     * @param token - 일반적으로 액세스 토큰 / 토큰 재발급 요청 시에는 리프레쉬 토큰이 들어옴
+     * @return 해당 토큰의 만료정보를 반환
+     */
+    public Date getExpiration(String token) {
+        return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token).getBody().getExpiration();
     }
 
     /**
@@ -152,15 +184,6 @@ public class TokenProvider {
         claims.put("role", user.getRole());
 
         return claims;
-    }
-
-    /**
-     * 토큰의 만료기한 반환
-     * @param token - 일반적으로 액세스 토큰 / 토큰 재발급 요청 시에는 리프레쉬 토큰이 들어옴
-     * @return 해당 토큰의 만료정보를 반환
-     */
-    private Date getExpiration(String token) {
-        return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token).getBody().getExpiration();
     }
 
     /**
